@@ -1,0 +1,98 @@
+function criaEventos() {
+  var valores = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet().getDataRange().getValues();
+  Logger.log("Dados da planilha: " + JSON.stringify(valores)); // Log para verificar os dados lidos da planilha
+
+  var agenda = CalendarApp.getDefaultCalendar();
+
+  for (var i = 1; i < valores.length; i++) {
+    var linha = valores[i];
+    
+    var data = linha[0]; // Data
+    var jogo = linha[1]; // Jogo
+    var local = linha[2]; // Local
+    var horaInicio = linha[3]; // Hora de início
+    var horaFim = linha[4]; // Hora de fim
+
+    Logger.log("Processando linha " + (i + 1) + ": " + JSON.stringify(linha)); // Log para verificar cada linha processada
+
+    // Converte a data de texto para um objeto Date
+    var dataInicio = new Date(data);
+    if (isNaN(dataInicio.getTime())) {
+      Logger.log("Data inválida detectada, tentando forçar o formato: " + data);
+      // Se a data for inválida, tente forçar a conversão
+      dataInicio = new Date(data.replace(/(\d{2})\/(\d{2})\/(\d{4})/, "$3-$2-$1"));
+    }
+
+    // Verifica se a data foi convertida corretamente
+    Logger.log("Data de início convertida: " + dataInicio);
+
+    var dataFim = new Date(dataInicio.getTime()); // Data de fim é a mesma data inicial
+
+    // Garantir que horaInicio e horaFim sejam strings no formato "HH:mm"
+    if (typeof horaInicio !== 'string') {
+      horaInicio = Utilities.formatDate(new Date(horaInicio), Session.getScriptTimeZone(), 'HH:mm');
+    }
+    if (typeof horaFim !== 'string') {
+      horaFim = Utilities.formatDate(new Date(horaFim), Session.getScriptTimeZone(), 'HH:mm');
+    }
+
+    // Log para verificar as horas
+    Logger.log("Hora de início: " + horaInicio + " | Hora de fim: " + horaFim);
+
+    // Garantir que as horas e minutos sejam extraídos corretamente
+    var horaInicioArray = horaInicio.split(":");
+    var horaFimArray = horaFim.split(":");
+
+    // Ajusta as horas para o evento
+    dataInicio.setHours(parseInt(horaInicioArray[0]), parseInt(horaInicioArray[1]));
+    dataFim.setHours(parseInt(horaFimArray[0]), parseInt(horaFimArray[1]));
+
+    // Log para verificar os valores finais das datas e horas
+    Logger.log("Data de início ajustada: " + dataInicio);
+    Logger.log("Data de fim ajustada: " + dataFim);
+
+    // Configura a cor do evento com base no local (se for em casa: verde ; se for fora: verde claro)
+    var cor;
+    switch(local) {
+      case "Couto Pereira":
+        cor = CalendarApp.EventColor.GREEN;
+        break;
+      default:
+        cor = CalendarApp.EventColor.PALE_GREEN;
+    }
+
+    // Verifica se o evento já existe no calendário
+    var eventosExistentes = agenda.getEvents(dataInicio, dataFim, {search: jogo});
+
+    if (eventosExistentes.length > 0) {
+      // Se o evento já existir, atualiza as informações
+      Logger.log("Evento já existe. Atualizando o evento: " + jogo);
+
+      var eventoExistente = eventosExistentes[0]; // Pode ter mais de um evento encontrado, então vamos usar o primeiro
+
+      // Atualiza o evento com os novos dados
+      eventoExistente.setLocation(local);
+      eventoExistente.setColor(cor);
+      eventoExistente.setTitle(jogo); // Caso o nome também deva ser atualizado
+
+      // Se o local for "Couto Pereira", adiciona uma notificação 5 dias antes (esse if é aplicado nos eventos existentes)
+      // caso aconteça de algum jogo que era fora, mudar para ser em casa, por exemplo
+      // Lembrando que os jogos fora estão ficando com a notificação padrão do Calendar de 30 minutos
+      if (local === "Couto Pereira") {
+        eventoExistente.addPopupReminder(7200); // 5 dias = 7200 minutos
+      }
+    } else {
+      // Caso não exista, cria um novo evento
+      Logger.log("Evento não encontrado. Criando um novo evento: " + jogo);
+
+      // Criação do novo evento
+      var evento = agenda.createEvent(jogo, dataInicio, dataFim, {location: local});
+      evento.setColor(cor);
+
+      // Adicionando para o novo evento a regra de: se o local for "Couto Pereira", adiciona uma notificação 5 dias antes
+      if (local === "Couto Pereira") {
+        evento.addPopupReminder(7200); // 5 dias = 7200 minutos
+      }
+    }
+  }
+}
